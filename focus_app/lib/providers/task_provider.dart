@@ -1,8 +1,26 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import '../models/task.dart';
+import '../repositories/task_repository.dart';
 
 class TaskProvider extends ChangeNotifier {
+  TaskProvider(this._repo);
+
+  final TaskRepository _repo;
   final List<Task> _tasks = [];
+
+  // ── Initialisation ────────────────────────────────────────────────────────
+
+  Future<void> init() async {
+    final saved = await _repo.loadAll();
+    _tasks
+      ..clear()
+      ..addAll(saved);
+    notifyListeners();
+  }
+
+  // ── Getters ───────────────────────────────────────────────────────────────
 
   List<Task> get tasks => List.unmodifiable(_tasks);
 
@@ -17,8 +35,11 @@ class TaskProvider extends ChangeNotifier {
     }
   }
 
+  // ── Mutations ─────────────────────────────────────────────────────────────
+
   void addTask(Task task) {
     _tasks.add(task);
+    unawaited(_repo.save(task));
     notifyListeners();
   }
 
@@ -26,6 +47,7 @@ class TaskProvider extends ChangeNotifier {
     final index = _tasks.indexWhere((t) => t.id == updated.id);
     if (index == -1) return;
     _tasks[index] = updated;
+    unawaited(_repo.save(updated));
     notifyListeners();
   }
 
@@ -36,6 +58,7 @@ class TaskProvider extends ChangeNotifier {
       isArchived: true,
       updatedAt: DateTime.now(),
     );
+    unawaited(_repo.save(_tasks[index]));
     notifyListeners();
   }
 }

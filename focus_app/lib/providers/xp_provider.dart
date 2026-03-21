@@ -1,12 +1,25 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import '../models/xp_balance.dart';
+import '../repositories/xp_repository.dart';
 
 /// Manages XP state: daily XP, lifetime XP, carryover.
 ///
 /// XP calculation logic (base XP, reflection bonus, multipliers) lives in
 /// XPService — this provider only holds the balance and applies mutations.
 class XpProvider extends ChangeNotifier {
+  XpProvider(this._repo);
+
+  final XpRepository _repo;
   XPBalance _xpBalance = XPBalance.initial();
+
+  // ── Initialisation ────────────────────────────────────────────────────────
+
+  Future<void> init() async {
+    _xpBalance = await _repo.load();
+    notifyListeners();
+  }
 
   // ── Getters ──────────────────────────────────────────────────────────────
 
@@ -25,6 +38,7 @@ class XpProvider extends ChangeNotifier {
       dailyXp: _xpBalance.dailyXp + amount,
       lifetimeXp: _xpBalance.lifetimeXp + amount,
     );
+    _persist();
     notifyListeners();
   }
 
@@ -37,6 +51,7 @@ class XpProvider extends ChangeNotifier {
       dailyXp: _xpBalance.dailyXp - spent,
       totalSpentXp: _xpBalance.totalSpentXp + spent,
     );
+    _persist();
     notifyListeners();
   }
 
@@ -59,6 +74,13 @@ class XpProvider extends ChangeNotifier {
       carryoverXp: carryover,
       lastResetDate: DateTime.now(),
     );
+    _persist();
     notifyListeners();
+  }
+
+  // ── Internal ──────────────────────────────────────────────────────────────
+
+  void _persist() {
+    unawaited(_repo.save(_xpBalance));
   }
 }

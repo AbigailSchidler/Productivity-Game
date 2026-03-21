@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import '../models/session.dart';
+import '../repositories/session_repository.dart';
 import '../services/timer_service.dart';
 
 /// Manages active session state and session history.
@@ -8,11 +11,24 @@ import '../services/timer_service.dart';
 /// widgets displaying elapsed time rebuild through this provider — never
 /// through TimerService directly.
 class SessionProvider extends ChangeNotifier {
+  SessionProvider(this._repo);
+
+  final SessionRepository _repo;
   final TimerService _timer = TimerService();
 
   Session? _activeSession;
   bool _isPaused = false;
   final List<Session> _completedSessions = [];
+
+  // ── Initialisation ────────────────────────────────────────────────────────
+
+  Future<void> init() async {
+    final saved = await _repo.loadAll();
+    _completedSessions
+      ..clear()
+      ..addAll(saved);
+    notifyListeners();
+  }
 
   // ── Session state ─────────────────────────────────────────────────────────
 
@@ -87,6 +103,7 @@ class SessionProvider extends ChangeNotifier {
     _completedSessions.insert(0, completed);
     _activeSession = null;
     _isPaused = false;
+    unawaited(_repo.save(completed));
     notifyListeners();
   }
 
@@ -114,6 +131,7 @@ class SessionProvider extends ChangeNotifier {
     _completedSessions.insert(0, abandoned);
     _activeSession = null;
     _isPaused = false;
+    unawaited(_repo.save(abandoned));
     notifyListeners();
   }
 

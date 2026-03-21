@@ -1,12 +1,25 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import '../models/app_settings.dart';
+import '../repositories/settings_repository.dart';
 
 /// Manages user-configurable app settings.
 ///
 /// Exposes the full [AppSettings] object plus grouped update methods so that
 /// screens only touch the fields relevant to their concern.
 class SettingsProvider extends ChangeNotifier {
+  SettingsProvider(this._repo);
+
+  final SettingsRepository _repo;
   AppSettings _settings = const AppSettings();
+
+  // ── Initialisation ────────────────────────────────────────────────────────
+
+  Future<void> init() async {
+    _settings = await _repo.load();
+    notifyListeners();
+  }
 
   // ── Getter ────────────────────────────────────────────────────────────────
 
@@ -26,11 +39,13 @@ class SettingsProvider extends ChangeNotifier {
       focusWindowEndHour: endHour,
       focusWindowEndMinute: endMinute,
     );
+    _persist();
     notifyListeners();
   }
 
   void updateRestDays(List<int> days) {
     _settings = _settings.copyWith(restDays: days);
+    _persist();
     notifyListeners();
   }
 
@@ -38,6 +53,7 @@ class SettingsProvider extends ChangeNotifier {
 
   void updateLockMode(LockMode mode) {
     _settings = _settings.copyWith(lockMode: mode);
+    _persist();
     notifyListeners();
   }
 
@@ -57,6 +73,7 @@ class SettingsProvider extends ChangeNotifier {
       carryoverPercentage: carryoverPercentage,
       minimumNextDayXpFloor: minimumNextDayXpFloor,
     );
+    _persist();
     notifyListeners();
   }
 
@@ -67,15 +84,13 @@ class SettingsProvider extends ChangeNotifier {
       warningEnabled: enabled,
       warningLeadMinutes: leadMinutes,
     );
+    _persist();
     notifyListeners();
   }
 
-  // ── Bulk replace ──────────────────────────────────────────────────────────
+  // ── Internal ──────────────────────────────────────────────────────────────
 
-  /// Replaces the entire settings object at once.
-  /// Used when loading persisted settings from the repository.
-  void loadSettings(AppSettings loaded) {
-    _settings = loaded;
-    notifyListeners();
+  void _persist() {
+    unawaited(_repo.save(_settings));
   }
 }

@@ -5,15 +5,33 @@ import 'providers/session_provider.dart';
 import 'providers/settings_provider.dart';
 import 'providers/task_provider.dart';
 import 'providers/xp_provider.dart';
+import 'repositories/session_repository.dart';
+import 'repositories/settings_repository.dart';
+import 'repositories/task_repository.dart';
+import 'repositories/xp_repository.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  final sessionProvider = SessionProvider(SessionRepository());
+  final settingsProvider = SettingsProvider(SettingsRepository());
+  final taskProvider = TaskProvider(TaskRepository());
+  final xpProvider = XpProvider(XpRepository());
+
+  await Future.wait([
+    sessionProvider.init(),
+    settingsProvider.init(),
+    taskProvider.init(),
+    xpProvider.init(),
+  ]);
+
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => TaskProvider()),
-        ChangeNotifierProvider(create: (_) => SessionProvider()),
-        ChangeNotifierProvider(create: (_) => XpProvider()),
-        ChangeNotifierProvider(create: (_) => SettingsProvider()),
+        ChangeNotifierProvider.value(value: taskProvider),
+        ChangeNotifierProvider.value(value: sessionProvider),
+        ChangeNotifierProvider.value(value: xpProvider),
+        ChangeNotifierProvider.value(value: settingsProvider),
       ],
       child: const FocusApp(),
     ),
