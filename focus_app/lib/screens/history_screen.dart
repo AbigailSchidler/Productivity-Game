@@ -1,0 +1,18 @@
+import 'package:flutter/material.dart';
+
+class HistoryScreen extends StatelessWidget {
+  const HistoryScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Session History')),
+      body: const Center(
+        child: Text(
+          'No sessions yet.',
+          style: TextStyle(color: Colors.grey),
+        ),
+      ),
+    );
+  }
+}
