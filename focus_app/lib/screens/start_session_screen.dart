@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:uuid/uuid.dart';
 import '../models/session.dart';
+import '../providers/session_provider.dart';
 
 class StartSessionScreen extends StatefulWidget {
   const StartSessionScreen({super.key});
@@ -24,15 +27,19 @@ class _StartSessionScreenState extends State<StartSessionScreen> {
         ? 'Generic Session'
         : _titleController.text.trim();
 
-    Navigator.pushNamed(
-      context,
-      '/active-session',
-      arguments: {
-        'sessionType': _sessionType,
-        'title': title,
-        'plannedMinutes': _plannedMinutes,
-      },
+    final now = DateTime.now();
+    final session = Session(
+      id: const Uuid().v4(),
+      sessionType: _sessionType,
+      title: title,
+      plannedMinutes: _plannedMinutes,
+      startTime: now,
+      createdAt: now,
+      updatedAt: now,
     );
+
+    context.read<SessionProvider>().startSession(session);
+    Navigator.pushNamed(context, '/active-session');
   }
 
   @override

@@ -92,8 +92,9 @@ class AppSettings {
         lockMode: LockMode.values.byName(json['lockMode'] as String),
         reflectionBonusXp: json['reflectionBonusXp'] as int,
         xpToUnlockMinuteRatio: json['xpToUnlockMinuteRatio'] as int,
-        genericSessionMultiplier: json['genericSessionMultiplier'] as double,
-        carryoverPercentage: json['carryoverPercentage'] as double,
+        genericSessionMultiplier:
+            (json['genericSessionMultiplier'] as num).toDouble(),
+        carryoverPercentage: (json['carryoverPercentage'] as num).toDouble(),
         minimumNextDayXpFloor: json['minimumNextDayXpFloor'] as int,
         warningEnabled: json['warningEnabled'] as bool,
         warningLeadMinutes: json['warningLeadMinutes'] as int,
