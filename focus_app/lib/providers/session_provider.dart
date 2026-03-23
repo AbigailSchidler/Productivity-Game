@@ -37,6 +37,39 @@ class SessionProvider extends ChangeNotifier {
   bool get isPaused => _isPaused;
   List<Session> get completedSessions => List.unmodifiable(_completedSessions);
 
+  /// Sum of [Session.xpEarned] for all *completed* sessions today.
+  ///
+  /// Uses [Session.endTime] to identify today's sessions. This reflects only
+  /// XP earned from sessions — it excludes carryover, spending, and penalties
+  /// held in [XPBalance].
+  int get todaySessionXp {
+    final now = DateTime.now();
+    return _completedSessions
+        .where((s) =>
+            s.wasCompleted &&
+            s.endTime != null &&
+            s.endTime!.year == now.year &&
+            s.endTime!.month == now.month &&
+            s.endTime!.day == now.day)
+        .fold(0, (sum, s) => sum + s.xpEarned);
+  }
+
+  /// Returns the IDs of recently used tasks, deduplicated, most recent first.
+  ///
+  /// Only task sessions (non-null taskId) contribute. Generic sessions are
+  /// ignored. The caller is responsible for resolving IDs to Task objects.
+  List<String> recentTaskIds({int limit = 3}) {
+    final seen = <String>{};
+    final result = <String>[];
+    for (final s in _completedSessions) {
+      if (s.taskId != null && seen.add(s.taskId!)) {
+        result.add(s.taskId!);
+        if (result.length >= limit) break;
+      }
+    }
+    return result;
+  }
+
   // ── Timer state (forwarded from TimerService) ─────────────────────────────
 
   Duration get elapsed => _timer.elapsed;

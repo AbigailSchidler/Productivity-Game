@@ -68,6 +68,7 @@ class _TaskTile extends StatelessWidget {
       title: Text(task.title),
       subtitle: Text(
         '${task.category} · ${task.defaultDurationMinutes} min'
+        ' · ${task.difficulty.label}'
         '${task.isRecurring ? ' · recurring' : ''}',
       ),
       trailing: isPicker

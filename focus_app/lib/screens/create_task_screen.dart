@@ -20,6 +20,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
   final _categoryController = TextEditingController();
   int _durationMinutes = 25;
   bool _isRecurring = false;
+  TaskDifficulty _difficulty = TaskDifficulty.normal;
 
   @override
   void initState() {
@@ -47,6 +48,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
           : _categoryController.text.trim(),
       defaultDurationMinutes: _durationMinutes,
       isRecurring: _isRecurring,
+      difficulty: _difficulty,
       createdAt: now,
       updatedAt: now,
     );
@@ -101,6 +103,20 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
               onChanged: (v) => setState(() => _isRecurring = v),
               contentPadding: EdgeInsets.zero,
             ),
+            const SizedBox(height: 16),
+            const Text('How hard is this task for you to do?'),
+            const SizedBox(height: 8),
+            _DifficultyPicker(
+              selected: _difficulty,
+              onChanged: (d) => setState(() => _difficulty = d),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${_difficulty.multiplierLabel} XP multiplier',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
             const Spacer(),
             ElevatedButton(
               onPressed: _titleController.text.trim().isEmpty ? null : _save,
@@ -110,6 +126,30 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _DifficultyPicker extends StatelessWidget {
+  const _DifficultyPicker({
+    required this.selected,
+    required this.onChanged,
+  });
+
+  final TaskDifficulty selected;
+  final void Function(TaskDifficulty) onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      children: TaskDifficulty.values.map((d) {
+        return ChoiceChip(
+          label: Text(d.label),
+          selected: selected == d,
+          onSelected: (_) => onChanged(d),
+        );
+      }).toList(),
     );
   }
 }

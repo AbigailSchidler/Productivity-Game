@@ -221,6 +221,7 @@ class _TaskList extends StatelessWidget {
           title: Text(task.title),
           subtitle: Text(
             '${task.category} · ${task.defaultDurationMinutes} min'
+            ' · ${task.difficulty.label}'
             '${task.isRecurring ? ' · recurring' : ''}',
           ),
           trailing: const Icon(Icons.chevron_right),

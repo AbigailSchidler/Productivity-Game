@@ -32,27 +32,27 @@ class XpService {
   ///
   /// Base rule: 1 minute = 1 XP.
   ///
-  /// Multipliers are applied to the base before the reflection bonus:
-  /// - Generic sessions apply [genericSessionMultiplier] (default 0.85).
+  /// Multipliers applied before the reflection bonus:
+  /// - Generic sessions: [genericSessionMultiplier] (default 0.85).
+  /// - Task sessions: [taskDifficultyMultiplier] (1.0 default; set from
+  ///   [TaskDifficulty.multiplier] on the selected task).
   /// - [scoringMultiplier] is reserved for a future AI confidence score
-  ///   (0.0–1.0 range, default 1.0 = no adjustment). When the AI layer
-  ///   is added, pass the confidence score here; everything else composes
-  ///   automatically.
+  ///   (default 1.0 = no adjustment).
   ///
   /// Reflection bonus ([reflectionBonusXp], default 5) is additive after
-  /// all multipliers so it rewards the act of reflecting regardless of
-  /// session type.
+  /// all multipliers so it rewards reflecting regardless of session type.
   XpCalculation calculateSessionXp({
     required int actualMinutes,
     required SessionType sessionType,
     required bool hasReflection,
     int reflectionBonusXp = 5,
     double genericSessionMultiplier = 0.85,
+    double taskDifficultyMultiplier = 1.0,
     double scoringMultiplier = 1.0,
   }) {
     final effectiveMultiplier = sessionType == SessionType.generic
         ? genericSessionMultiplier * scoringMultiplier
-        : scoringMultiplier;
+        : taskDifficultyMultiplier * scoringMultiplier;
 
     final baseXp = (actualMinutes * effectiveMultiplier).floor();
     final reflectionBonus = hasReflection ? reflectionBonusXp : 0;

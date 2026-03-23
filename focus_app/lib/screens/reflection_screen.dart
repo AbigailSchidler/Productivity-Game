@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../models/session.dart';
+import '../models/task.dart';
 import '../providers/session_provider.dart';
 import '../providers/settings_provider.dart';
+import '../providers/task_provider.dart';
+import '../providers/streak_provider.dart';
 import '../providers/unlock_provider.dart';
 import '../providers/xp_provider.dart';
 import '../services/xp_service.dart';
@@ -32,12 +36,17 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
     final settings = context.read<SettingsProvider>().settings;
     final text = _reflectionController.text.trim();
 
+    final task = session.taskId != null
+        ? context.read<TaskProvider>().getTaskById(session.taskId!)
+        : null;
+
     final calc = _xpService.calculateSessionXp(
       actualMinutes: sp.elapsed.inMinutes,
       sessionType: session.sessionType,
       hasReflection: hasReflection,
       reflectionBonusXp: settings.reflectionBonusXp,
       genericSessionMultiplier: settings.genericSessionMultiplier,
+      taskDifficultyMultiplier: task?.difficulty.multiplier ?? 1.0,
     );
 
     final unlockMinutes = _xpService.calculateUnlockMinutes(
@@ -52,6 +61,11 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
       unlockMinutesGranted: unlockMinutes,
       reflectionText: (hasReflection && text.isNotEmpty) ? text : null,
     );
+    // todaySessionXp is read after completeSession so it includes this session.
+    context.read<StreakProvider>().recordSession(
+          settings,
+          dailySessionXp: sp.todaySessionXp,
+        );
 
     Navigator.pushNamedAndRemoveUntil(
       context,
@@ -65,6 +79,9 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
     final sp = context.watch<SessionProvider>();
     final session = sp.activeSession;
     final elapsedMinutes = sp.elapsed.inMinutes;
+    final task = session?.taskId != null
+        ? context.read<TaskProvider>().getTaskById(session!.taskId!)
+        : null;
 
     return PopScope(
       canPop: false,
@@ -84,15 +101,8 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
                     fontSize: 18, fontWeight: FontWeight.bold),
                 textAlign: TextAlign.center,
               ),
-              if (session != null &&
-                  session.sessionType.name == 'generic') ...[
-                const SizedBox(height: 8),
-                const Text(
-                  'Generic session (0.85× XP multiplier)',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey),
-                ),
-              ],
+              const SizedBox(height: 8),
+              _MultiplierHint(session: session, task: task),
               const SizedBox(height: 32),
               const Text(
                 'What did you work on? (+5 XP bonus)',
@@ -109,20 +119,52 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
               ),
               const SizedBox(height: 24),
               ElevatedButton(
-                onPressed: () =>
-                    _finish(context, hasReflection: true),
+                onPressed: () => _finish(context, hasReflection: true),
                 child: const Text('Submit & Earn XP'),
               ),
               const SizedBox(height: 12),
               TextButton(
-                onPressed: () =>
-                    _finish(context, hasReflection: false),
+                onPressed: () => _finish(context, hasReflection: false),
                 child: const Text('Skip reflection'),
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Shows the active XP multiplier for the current session.
+///
+/// Generic: "Generic session (0.85× XP)"
+/// Task:    "Hard (1.25× XP)"  or  "Normal (1.0× XP)"
+class _MultiplierHint extends StatelessWidget {
+  const _MultiplierHint({required this.session, required this.task});
+
+  final Session? session;
+  final Task? task;
+
+  @override
+  Widget build(BuildContext context) {
+    if (session == null) return const SizedBox.shrink();
+
+    final String label;
+    if (session!.sessionType == SessionType.generic) {
+      label = 'Generic session (0.85× XP)';
+    } else if (task != null) {
+      label =
+          '${task!.difficulty.label} task (${task!.difficulty.multiplierLabel} XP)';
+    } else {
+      return const SizedBox.shrink();
+    }
+
+    return Text(
+      label,
+      textAlign: TextAlign.center,
+      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
     );
   }
 }

@@ -1,9 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:uuid/uuid.dart';
 import '../models/app_settings.dart';
+import '../models/session.dart';
+import '../models/task.dart';
 import '../providers/session_provider.dart';
+import '../providers/settings_provider.dart';
+import '../providers/streak_provider.dart';
+import '../providers/task_provider.dart';
 import '../providers/unlock_provider.dart';
 import '../providers/xp_provider.dart';
+import '../services/focus_window_service.dart';
+import '../services/streak_service.dart' show kDailyStreakXpThreshold;
+
+const _focusWindowService = FocusWindowService();
+
+String _formatTime(int hour, int minute) {
+  final period = hour < 12 ? 'AM' : 'PM';
+  final displayHour = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+  final minuteStr = minute.toString().padLeft(2, '0');
+  return '$displayHour:$minuteStr $period';
+}
 
 String _formatCountdown(int totalSeconds) {
   final m = totalSeconds ~/ 60;
@@ -19,6 +36,14 @@ class HomeScreen extends StatelessWidget {
     final xp = context.watch<XpProvider>();
     final session = context.watch<SessionProvider>();
     final unlock = context.watch<UnlockProvider>();
+    final settings = context.watch<SettingsProvider>().settings;
+    final streak = context.watch<StreakProvider>();
+    final taskProvider = context.watch<TaskProvider>();
+    final recentTasks = session
+        .recentTaskIds()
+        .map(taskProvider.getTaskById)
+        .whereType<Task>()
+        .toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -30,39 +55,204 @@ class HomeScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(24.0),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 16),
+              _FocusWindowCard(settings: settings, unlock: unlock),
+              const SizedBox(height: 16),
+              _UnlockStatusCard(unlock: unlock),
+              const SizedBox(height: 16),
+              _XpCard(dailyXp: xp.dailyXp, lifetimeXp: xp.lifetimeXp),
+              const SizedBox(height: 16),
+              _StreakCard(
+                currentStreak: streak.currentStreak,
+                longestStreak: streak.longestStreak,
+              ),
+              const SizedBox(height: 16),
+              if (!session.hasActiveSession)
+                _QuickStartRow(recentTasks: recentTasks),
+              const SizedBox(height: 16),
+              if (session.hasActiveSession) ...[
+                ElevatedButton(
+                  onPressed: () =>
+                      Navigator.pushNamed(context, '/active-session'),
+                  child: const Text('Resume Active Session'),
+                ),
+              ] else ...[
+                OutlinedButton(
+                  onPressed: () =>
+                      Navigator.pushNamed(context, '/start-session'),
+                  child: const Text('More options'),
+                ),
+              ],
+              const SizedBox(height: 16),
+              OutlinedButton(
+                onPressed: () => Navigator.pushNamed(context, '/history'),
+                child: const Text('Session History'),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton(
+                onPressed: () => Navigator.pushNamed(context, '/tasks'),
+                child: const Text('Manage Tasks'),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _QuickStartRow extends StatelessWidget {
+  const _QuickStartRow({required this.recentTasks});
+
+  final List<Task> recentTasks;
+
+  void _startGeneric(BuildContext context) {
+    final now = DateTime.now();
+    context.read<SessionProvider>().startSession(Session(
+          id: const Uuid().v4(),
+          sessionType: SessionType.generic,
+          title: 'Generic Session',
+          plannedMinutes: 25,
+          startTime: now,
+          createdAt: now,
+          updatedAt: now,
+        ));
+    Navigator.pushNamed(context, '/active-session');
+  }
+
+  void _startTask(BuildContext context, Task task) {
+    final now = DateTime.now();
+    context.read<SessionProvider>().startSession(Session(
+          id: const Uuid().v4(),
+          sessionType: SessionType.task,
+          taskId: task.id,
+          title: task.title,
+          plannedMinutes: task.defaultDurationMinutes,
+          startTime: now,
+          createdAt: now,
+          updatedAt: now,
+        ));
+    Navigator.pushNamed(context, '/active-session');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Quick start',
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          children: [
+            ActionChip(
+              avatar: const Icon(Icons.bolt, size: 16),
+              label: const Text('Generic'),
+              onPressed: () => _startGeneric(context),
+            ),
+            ...recentTasks.map(
+              (task) => ActionChip(
+                avatar: const Icon(Icons.check_box_outlined, size: 16),
+                label: Text(task.title),
+                onPressed: () => _startTask(context, task),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _FocusWindowCard extends StatelessWidget {
+  const _FocusWindowCard({required this.settings, required this.unlock});
+
+  final AppSettings settings;
+  final UnlockProvider unlock;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isRestDay = _focusWindowService.isRestDay(settings);
+    final isInWindow = _focusWindowService.isInsideFocusWindow(settings);
+    final isLocked = !unlock.isUnlocked;
+
+    final windowStart = _formatTime(
+        settings.focusWindowStartHour, settings.focusWindowStartMinute);
+    final windowEnd = _formatTime(
+        settings.focusWindowEndHour, settings.focusWindowEndMinute);
+
+    String statusText;
+    IconData statusIcon;
+    Color cardColor;
+    Color contentColor;
+
+    if (isRestDay) {
+      statusText = 'Rest day — restrictions relaxed';
+      statusIcon = Icons.weekend;
+      cardColor = colorScheme.surfaceContainerHighest;
+      contentColor = colorScheme.onSurfaceVariant;
+    } else if (!isInWindow) {
+      statusText = 'Outside focus window — restrictions relaxed';
+      statusIcon = Icons.schedule;
+      cardColor = colorScheme.surfaceContainerHighest;
+      contentColor = colorScheme.onSurfaceVariant;
+    } else if (isLocked) {
+      statusText = 'Inside focus window — complete a session to earn access';
+      statusIcon = Icons.lock_clock;
+      cardColor = colorScheme.errorContainer;
+      contentColor = colorScheme.onErrorContainer;
+    } else {
+      statusText = 'Inside focus window';
+      statusIcon = Icons.radio_button_checked;
+      cardColor = colorScheme.primaryContainer;
+      contentColor = colorScheme.onPrimaryContainer;
+    }
+
+    return Card(
+      color: cardColor,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const SizedBox(height: 16),
-            _UnlockStatusCard(unlock: unlock),
-            const SizedBox(height: 16),
-            _XpCard(dailyXp: xp.dailyXp, lifetimeXp: xp.lifetimeXp),
-            const SizedBox(height: 32),
-            if (session.hasActiveSession) ...[
-              ElevatedButton(
-                onPressed: () =>
-                    Navigator.pushNamed(context, '/active-session'),
-                child: const Text('Resume Active Session'),
-              ),
-            ] else ...[
-              ElevatedButton(
-                onPressed: () =>
-                    Navigator.pushNamed(context, '/start-session'),
-                child: const Text('Start Session'),
+            Row(
+              children: [
+                Icon(statusIcon, color: contentColor, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    statusText,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: contentColor,
+                          fontWeight: FontWeight.w500,
+                        ),
+                  ),
+                ),
+              ],
+            ),
+            if (!isRestDay) ...[
+              const SizedBox(height: 6),
+              Text(
+                'Focus window: $windowStart – $windowEnd',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: contentColor,
+                    ),
               ),
             ],
-            const SizedBox(height: 16),
-            OutlinedButton(
-              onPressed: () => Navigator.pushNamed(context, '/history'),
-              child: const Text('Session History'),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton(
-              onPressed: () => Navigator.pushNamed(context, '/tasks'),
-              child: const Text('Manage Tasks'),
-            ),
           ],
         ),
       ),
@@ -185,6 +375,56 @@ class _LockModeChip extends StatelessWidget {
   }
 }
 
+class _StreakCard extends StatelessWidget {
+  const _StreakCard({
+    required this.currentStreak,
+    required this.longestStreak,
+  });
+
+  final int currentStreak;
+  final int longestStreak;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: _XpStat(
+                    label: 'Streak',
+                    value: currentStreak,
+                    unit: currentStreak == 1 ? 'day' : 'days',
+                  ),
+                ),
+                const VerticalDivider(indent: 4, endIndent: 4),
+                Expanded(
+                  child: _XpStat(
+                    label: 'Best',
+                    value: longestStreak,
+                    unit: longestStreak == 1 ? 'day' : 'days',
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Requires $kDailyStreakXpThreshold XP/day from sessions',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _XpCard extends StatelessWidget {
   const _XpCard({required this.dailyXp, required this.lifetimeXp});
 
@@ -219,17 +459,18 @@ class _XpCard extends StatelessWidget {
 }
 
 class _XpStat extends StatelessWidget {
-  const _XpStat({required this.label, required this.value});
+  const _XpStat({required this.label, required this.value, this.unit = 'XP'});
 
   final String label;
   final int value;
+  final String unit;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
         Text(
-          '$value XP',
+          '$value $unit',
           style: Theme.of(context)
               .textTheme
               .titleLarge
