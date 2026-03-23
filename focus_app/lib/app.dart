@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'screens/create_task_screen.dart';
+import 'screens/history_screen.dart';
 import 'screens/home_screen.dart';
-import 'screens/start_session_screen.dart';
 import 'screens/active_session_screen.dart';
 import 'screens/reflection_screen.dart';
-import 'screens/history_screen.dart';
+import 'screens/session_complete_screen.dart';
 import 'screens/settings_screen.dart';
+import 'screens/start_session_screen.dart';
+import 'screens/task_list_screen.dart';
 
 class FocusApp extends StatelessWidget {
   const FocusApp({super.key});
@@ -23,8 +26,12 @@ class FocusApp extends StatelessWidget {
         '/start-session': (_) => const StartSessionScreen(),
         '/active-session': (_) => const ActiveSessionScreen(),
         '/reflection': (_) => const ReflectionScreen(),
+        '/session-complete': (_) => const SessionCompleteScreen(),
         '/history': (_) => const HistoryScreen(),
         '/settings': (_) => const SettingsScreen(),
+        '/tasks': (_) => const TaskListScreen(),
+        '/tasks-picker': (_) => const TaskListScreen(isPicker: true),
+        '/create-task': (_) => const CreateTaskScreen(),
       },
     );
   }

@@ -4,6 +4,7 @@ import 'app.dart';
 import 'providers/session_provider.dart';
 import 'providers/settings_provider.dart';
 import 'providers/task_provider.dart';
+import 'providers/unlock_provider.dart';
 import 'providers/xp_provider.dart';
 import 'repositories/session_repository.dart';
 import 'repositories/settings_repository.dart';
@@ -25,6 +26,10 @@ void main() async {
     xpProvider.init(),
   ]);
 
+  // Seed initial lock mode from persisted settings.
+  final unlockProvider = UnlockProvider()
+    ..setLockMode(settingsProvider.settings.lockMode);
+
   runApp(
     MultiProvider(
       providers: [
@@ -32,6 +37,7 @@ void main() async {
         ChangeNotifierProvider.value(value: sessionProvider),
         ChangeNotifierProvider.value(value: xpProvider),
         ChangeNotifierProvider.value(value: settingsProvider),
+        ChangeNotifierProvider.value(value: unlockProvider),
       ],
       child: const FocusApp(),
     ),

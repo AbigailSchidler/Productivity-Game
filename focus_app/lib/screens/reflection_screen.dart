@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/session_provider.dart';
 import '../providers/settings_provider.dart';
+import '../providers/unlock_provider.dart';
 import '../providers/xp_provider.dart';
 import '../services/xp_service.dart';
 
@@ -45,13 +46,18 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
     );
 
     context.read<XpProvider>().addXp(calc.totalXp);
+    context.read<UnlockProvider>().grantUnlockMinutes(unlockMinutes);
     sp.completeSession(
       xpEarned: calc.totalXp,
       unlockMinutesGranted: unlockMinutes,
       reflectionText: (hasReflection && text.isNotEmpty) ? text : null,
     );
 
-    Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+    Navigator.pushNamedAndRemoveUntil(
+      context,
+      '/session-complete',
+      (route) => route.isFirst,
+    );
   }
 
   @override
