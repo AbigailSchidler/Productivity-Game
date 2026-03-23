@@ -11,9 +11,14 @@ import '../providers/task_provider.dart';
 import '../providers/unlock_provider.dart';
 import '../providers/xp_provider.dart';
 import '../services/focus_window_service.dart';
+import '../services/mascot_service.dart';
 import '../services/streak_service.dart' show kDailyStreakXpThreshold;
 
+// Dart weekday: 7 = Sunday.
+const int _sunday = 7;
+
 const _focusWindowService = FocusWindowService();
+const _mascotService = MascotService();
 
 String _formatTime(int hour, int minute) {
   final period = hour < 12 ? 'AM' : 'PM';
@@ -21,6 +26,34 @@ String _formatTime(int hour, int minute) {
   final minuteStr = minute.toString().padLeft(2, '0');
   return '$displayHour:$minuteStr $period';
 }
+
+({IconData icon, String message}) _mascotContent(MascotState state) =>
+    switch (state) {
+      MascotState.locked => (
+          icon: Icons.lock_outline,
+          message: 'we should probably focus',
+        ),
+      MascotState.focusing => (
+          icon: Icons.self_improvement,
+          message: 'in the zone — keep going',
+        ),
+      MascotState.completedSession => (
+          icon: Icons.check_circle_outline,
+          message: 'nice!! session done',
+        ),
+      MascotState.outsideFocusWindow => (
+          icon: Icons.nights_stay_outlined,
+          message: 'outside focus window',
+        ),
+      MascotState.streakActive => (
+          icon: Icons.local_fire_department_outlined,
+          message: "we're on a streak",
+        ),
+      MascotState.idle => (
+          icon: Icons.sentiment_satisfied_outlined,
+          message: 'ready when you are',
+        ),
+    };
 
 String _formatCountdown(int totalSeconds) {
   final m = totalSeconds ~/ 60;
@@ -45,6 +78,20 @@ class HomeScreen extends StatelessWidget {
         .whereType<Task>()
         .toList();
 
+    final mascotState = _mascotService.resolve(
+      hasActiveSession: session.hasActiveSession,
+      isInsideFocusWindow: _focusWindowService.isInsideFocusWindow(settings),
+      isLocked: !unlock.isUnlocked,
+      completedSessionToday: session.todaySessionXp > 0,
+      currentStreak: streak.currentStreak,
+    );
+
+    final isSunday = DateTime.now().weekday == _sunday;
+    final recap = isSunday ? session.weeklyRecap() : null;
+    final topCategory = recap?.topTaskId != null
+        ? taskProvider.getTaskById(recap!.topTaskId!)?.category
+        : null;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Focus App'),
@@ -62,6 +109,8 @@ class HomeScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 16),
+              _MascotDisplay(state: mascotState),
+              const SizedBox(height: 16),
               _FocusWindowCard(settings: settings, unlock: unlock),
               const SizedBox(height: 16),
               _UnlockStatusCard(unlock: unlock),
@@ -72,6 +121,14 @@ class HomeScreen extends StatelessWidget {
                 currentStreak: streak.currentStreak,
                 longestStreak: streak.longestStreak,
               ),
+              if (recap != null) ...[
+                const SizedBox(height: 16),
+                _WeeklyRecapCard(
+                  recap: recap,
+                  topCategory: topCategory,
+                  currentStreak: streak.currentStreak,
+                ),
+              ],
               const SizedBox(height: 16),
               if (!session.hasActiveSession)
                 _QuickStartRow(recentTasks: recentTasks),
@@ -104,6 +161,114 @@ class HomeScreen extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _WeeklyRecapCard extends StatelessWidget {
+  const _WeeklyRecapCard({
+    required this.recap,
+    required this.topCategory,
+    required this.currentStreak,
+  });
+
+  final WeeklyRecap recap;
+  final String? topCategory;
+  final int currentStreak;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final streakLabel = currentStreak == 0
+        ? 'No active streak'
+        : '$currentStreak ${currentStreak == 1 ? 'day' : 'days'}';
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.calendar_month,
+                    size: 18, color: colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(
+                  'Weekly Recap',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _RecapStat(
+                    label: 'Sessions',
+                    value: '${recap.sessionCount}',
+                  ),
+                ),
+                Expanded(
+                  child: _RecapStat(
+                    label: 'XP earned',
+                    value: '${recap.totalXp}',
+                  ),
+                ),
+                Expanded(
+                  child: _RecapStat(
+                    label: 'Streak',
+                    value: streakLabel,
+                  ),
+                ),
+              ],
+            ),
+            if (topCategory != null) ...[
+              const SizedBox(height: 8),
+              const Divider(height: 1),
+              const SizedBox(height: 8),
+              Text(
+                'Most used: $topCategory',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RecapStat extends StatelessWidget {
+  const _RecapStat({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Text(
+          value,
+          style: Theme.of(context)
+              .textTheme
+              .titleMedium
+              ?.copyWith(fontWeight: FontWeight.bold),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.bodySmall,
+          textAlign: TextAlign.center,
+        ),
+      ],
     );
   }
 }
@@ -171,6 +336,37 @@ class _QuickStartRow extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ],
+    );
+  }
+}
+
+// TODO: replace with custom monkey artwork when assets are ready
+class _MascotDisplay extends StatelessWidget {
+  const _MascotDisplay({required this.state});
+
+  final MascotState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final content = _mascotContent(state);
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(
+          content.icon,
+          size: 32,
+          color: colorScheme.onSurfaceVariant,
+        ),
+        const SizedBox(width: 12),
+        Text(
+          content.message,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
         ),
       ],
     );

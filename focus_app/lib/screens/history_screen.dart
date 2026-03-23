@@ -11,7 +11,6 @@ class HistoryScreen extends StatefulWidget {
 }
 
 class _HistoryScreenState extends State<HistoryScreen> {
-  bool _calendarView = false;
   late DateTime _focusedMonth;
   DateTime? _selectedDate;
 
@@ -24,10 +23,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   DateTime _dateOnly(DateTime dt) => DateTime(dt.year, dt.month, dt.day);
 
+  /// Groups completed sessions by the calendar date on which they ended.
+  ///
+  /// Uses [Session.endTime] so the dot appears on the day the work finished,
+  /// not the day it started. Falls back to [Session.startTime] as a safety
+  /// net (sessions that completed on the same day they started are unaffected).
   Map<DateTime, List<Session>> _groupByDay(List<Session> sessions) {
     final map = <DateTime, List<Session>>{};
     for (final s in sessions) {
-      final day = _dateOnly(s.startTime);
+      if (!s.wasCompleted) continue;
+      final day = _dateOnly(s.endTime ?? s.startTime);
       (map[day] ??= []).add(s);
     }
     return map;
@@ -36,48 +41,34 @@ class _HistoryScreenState extends State<HistoryScreen> {
   @override
   Widget build(BuildContext context) {
     final sessions = context.watch<SessionProvider>().completedSessions;
+    final grouped = _groupByDay(sessions);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Session History'),
-        actions: [
-          IconButton(
-            tooltip: _calendarView ? 'List view' : 'Calendar view',
-            icon: Icon(_calendarView ? Icons.list : Icons.calendar_month),
-            onPressed: () => setState(() => _calendarView = !_calendarView),
-          ),
-        ],
       ),
-      body: sessions.isEmpty
+      body: grouped.isEmpty
           ? const Center(
               child: Text(
-                'No sessions yet.',
+                'No completed sessions yet.',
                 style: TextStyle(color: Colors.grey),
               ),
             )
-          : _calendarView
-              ? _CalendarView(
-                  grouped: _groupByDay(sessions),
-                  focusedMonth: _focusedMonth,
-                  selectedDate: _selectedDate,
-                  onMonthChanged: (m) =>
-                      setState(() {
-                        _focusedMonth = m;
-                        _selectedDate = null;
-                      }),
-                  onDateSelected: (d) => setState(() => _selectedDate = d),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16.0),
-                  itemCount: sessions.length,
-                  itemBuilder: (context, index) =>
-                      _SessionCard(session: sessions[index]),
-                ),
+          : _CalendarView(
+              grouped: grouped,
+              focusedMonth: _focusedMonth,
+              selectedDate: _selectedDate,
+              onMonthChanged: (m) => setState(() {
+                _focusedMonth = m;
+                _selectedDate = null;
+              }),
+              onDateSelected: (d) => setState(() => _selectedDate = d),
+            ),
     );
   }
 }
 
-// ── Calendar view ─────────────────────────────────────────────────────────────
+// ── Calendar view ──────────────────────────────────────────────────────────────
 
 class _CalendarView extends StatelessWidget {
   final Map<DateTime, List<Session>> grouped;
@@ -93,6 +84,14 @@ class _CalendarView extends StatelessWidget {
     required this.onMonthChanged,
     required this.onDateSelected,
   });
+
+  static String _formatDate(DateTime d) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${months[d.month - 1]} ${d.day}, ${d.year}';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -113,7 +112,7 @@ class _CalendarView extends StatelessWidget {
           child: selectedDate == null
               ? const Center(
                   child: Text(
-                    'Tap a date to view sessions.',
+                    'Tap a highlighted date to view sessions.',
                     style: TextStyle(color: Colors.grey),
                   ),
                 )
@@ -125,7 +124,7 @@ class _CalendarView extends StatelessWidget {
                       ),
                     )
                   : ListView.builder(
-                      padding: const EdgeInsets.all(16.0),
+                      padding: const EdgeInsets.all(16),
                       itemCount: selectedSessions.length,
                       itemBuilder: (context, index) =>
                           _SessionCard(session: selectedSessions[index]),
@@ -134,17 +133,9 @@ class _CalendarView extends StatelessWidget {
       ],
     );
   }
-
-  static String _formatDate(DateTime d) {
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    return '${months[d.month - 1]} ${d.day}, ${d.year}';
-  }
 }
 
-// ── Month grid ────────────────────────────────────────────────────────────────
+// ── Month grid ─────────────────────────────────────────────────────────────────
 
 class _MonthGrid extends StatelessWidget {
   final Map<DateTime, List<Session>> grouped;
@@ -174,14 +165,13 @@ class _MonthGrid extends StatelessWidget {
     final today = DateTime.now();
     final todayOnly = DateTime(today.year, today.month, today.day);
 
-    // First day of the focused month (weekday 1=Mon … 7=Sun in Dart).
-    // We want Sunday-first grid, so offset = firstDow % 7 (Sun=0).
+    // First weekday of the month. Dart weekday: 1=Mon…7=Sun.
+    // Convert to Sunday-first offset: Sun=0, Mon=1 … Sat=6.
     final firstOfMonth = focusedMonth;
-    final firstDow = firstOfMonth.weekday % 7; // 0=Sun … 6=Sat
+    final firstDow = firstOfMonth.weekday % 7;
     final daysInMonth =
         DateTime(focusedMonth.year, focusedMonth.month + 1, 0).day;
 
-    // Build flat list of cells: nulls for leading blanks, then day numbers.
     final cells = <int?>[
       ...List<int?>.filled(firstDow, null),
       for (int d = 1; d <= daysInMonth; d++) d,
@@ -239,7 +229,7 @@ class _MonthGrid extends StatelessWidget {
                 .toList(),
           ),
           const SizedBox(height: 4),
-          // Day cells grid
+          // Day cells
           GridView.count(
             crossAxisCount: 7,
             shrinkWrap: true,
@@ -314,7 +304,7 @@ class _MonthGrid extends StatelessWidget {
   }
 }
 
-// ── Session card (unchanged from original) ────────────────────────────────────
+// ── Session card ───────────────────────────────────────────────────────────────
 
 class _SessionCard extends StatelessWidget {
   final Session session;
@@ -323,16 +313,18 @@ class _SessionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     final typeLabel =
         session.sessionType == SessionType.task ? 'Task' : 'Generic';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Title + type badge
             Row(
               children: [
                 Expanded(
@@ -348,30 +340,36 @@ class _SessionCard extends StatelessWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade200,
+                    color: colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
                     typeLabel,
-                    style: const TextStyle(fontSize: 12),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 8),
+            // Stats row
             Row(
               children: [
-                _Stat(label: 'Planned', value: '${session.plannedMinutes} min'),
+                _Stat(label: 'Duration', value: '${session.actualMinutes} min'),
                 const SizedBox(width: 16),
-                _Stat(label: 'Actual', value: '${session.actualMinutes} min'),
+                _Stat(label: 'Planned', value: '${session.plannedMinutes} min'),
                 const SizedBox(width: 16),
                 _Stat(label: 'XP', value: '+${session.xpEarned}'),
                 const SizedBox(width: 16),
                 _Stat(
-                    label: 'Unlock',
-                    value: '${session.unlockMinutesGranted} min'),
+                  label: 'Unlock',
+                  value: '${session.unlockMinutesGranted} min',
+                ),
               ],
             ),
+            // Reflection preview
             if (session.reflectionText != null &&
                 session.reflectionText!.isNotEmpty) ...[
               const SizedBox(height: 8),
@@ -381,9 +379,9 @@ class _SessionCard extends StatelessWidget {
                 session.reflectionText!,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 13,
-                  color: Colors.grey,
+                  color: colorScheme.onSurfaceVariant,
                   fontStyle: FontStyle.italic,
                 ),
               ),

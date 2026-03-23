@@ -5,6 +5,23 @@ import '../models/session.dart';
 import '../repositories/session_repository.dart';
 import '../services/timer_service.dart';
 
+/// Computed summary of the Mon–Sun week ending on a given Sunday.
+///
+/// [topTaskId] is the task ID used most in task-based sessions this week,
+/// or null if no task sessions occurred. The caller is responsible for
+/// resolving it to a [Task] and its category.
+class WeeklyRecap {
+  final int sessionCount;
+  final int totalXp;
+  final String? topTaskId;
+
+  const WeeklyRecap({
+    required this.sessionCount,
+    required this.totalXp,
+    this.topTaskId,
+  });
+}
+
 /// Manages active session state and session history.
 ///
 /// Owns a [TimerService] instance. Timer ticks drive [notifyListeners] so
@@ -52,6 +69,44 @@ class SessionProvider extends ChangeNotifier {
             s.endTime!.month == now.month &&
             s.endTime!.day == now.day)
         .fold(0, (sum, s) => sum + s.xpEarned);
+  }
+
+  /// Computes a [WeeklyRecap] for the Mon–Sun week that ends on [now].
+  ///
+  /// Only counts completed sessions whose [Session.endTime] falls within
+  /// [weekStart, weekEnd). Safe to call on any day — callers should only
+  /// display the result when today is Sunday (weekday == 7).
+  WeeklyRecap weeklyRecap({DateTime? now}) {
+    final today = now ?? DateTime.now();
+    // Today is Sunday (weekday=7). Week starts 6 days ago (Monday).
+    final weekStart = DateTime(today.year, today.month, today.day - 6);
+    final weekEnd = DateTime(today.year, today.month, today.day + 1);
+
+    final weekSessions = _completedSessions.where((s) {
+      if (!s.wasCompleted) return false;
+      final end = s.endTime ?? s.startTime;
+      return !end.isBefore(weekStart) && end.isBefore(weekEnd);
+    }).toList();
+
+    final totalXp = weekSessions.fold(0, (sum, s) => sum + s.xpEarned);
+
+    // Find the task ID that appeared most often this week.
+    final taskIdCounts = <String, int>{};
+    for (final s in weekSessions) {
+      if (s.taskId != null) {
+        taskIdCounts[s.taskId!] = (taskIdCounts[s.taskId!] ?? 0) + 1;
+      }
+    }
+    final topTaskId = taskIdCounts.isEmpty
+        ? null
+        : (taskIdCounts.entries.reduce((a, b) => a.value >= b.value ? a : b))
+            .key;
+
+    return WeeklyRecap(
+      sessionCount: weekSessions.length,
+      totalXp: totalXp,
+      topTaskId: topTaskId,
+    );
   }
 
   /// Returns the IDs of recently used tasks, deduplicated, most recent first.

@@ -384,6 +384,35 @@ Report missing connections.
 
 ---
 
+# Session 15 - Figma Screenshot Mapping
+
+Use the attached screenshot as a layout reference for HomeScreen.
+
+Requirements:
+
+Match the visual hierarchy and layout structure shown in the screenshot.
+
+Specifically match:
+
+- section order
+- spacing relationships
+- card grouping
+- typography hierarchy
+- button placement
+
+Do not modify:
+
+- providers
+- services
+- navigation logic
+- business logic
+
+Only update UI layout code.
+
+Keep implementation Flutter-native and responsive.
+
+---
+
 # Session Safety Rules
 
 Always remind Claude:
